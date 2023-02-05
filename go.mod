@@ -1,4 +1,4 @@
-module github.com/dimonrus/godb/v2
+module github.com/HardDie/godb/v2
 
 go 1.18
 
