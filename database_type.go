@@ -1,10 +1,12 @@
 package godb
 
 import (
+	"context"
 	"database/sql"
-	"github.com/dimonrus/gocli"
 	"sync"
 	"time"
+
+	"github.com/dimonrus/gocli"
 )
 
 // Queryer interface
@@ -13,6 +15,8 @@ type Queryer interface {
 	Prepare(query string) (*SqlStmt, error)
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(query string, args ...interface{}) *sql.Row
+	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
 }
 
 // Database Object Connection Interface

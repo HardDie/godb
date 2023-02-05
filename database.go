@@ -3,11 +3,12 @@ package godb
 import (
 	"context"
 	"database/sql"
-	"github.com/dimonrus/gocli"
 	"strconv"
 	"strings"
 	"time"
 	"unsafe"
+
+	"github.com/dimonrus/gocli"
 )
 
 var logger = func(lg gocli.Logger, message chan string) {
@@ -49,49 +50,74 @@ func getDb(connection Connection) (*sql.DB, error) {
 
 // Query SQL exec query
 func (dbo *DBO) Query(query string, args ...interface{}) (*sql.Rows, error) {
+	return dbo.QueryContext(context.Background(), query, args...)
+}
+
+// QueryContext SQL exec query
+func (dbo *DBO) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
 	if strings.Contains(query, "?") {
 		query = preparePositionalArgsQuery(query)
 	}
 	if dbo.Debug == true {
 		dbo.logMessage <- query
 	}
-	return dbo.DB.QueryContext(context.Background(), query, args...)
+	return dbo.DB.QueryContext(ctx, query, args...)
 }
 
 // Exec SQL run query
 func (dbo *DBO) Exec(query string, args ...interface{}) (sql.Result, error) {
+	return dbo.ExecContext(context.Background(), query, args...)
+}
+
+// ExecContext SQL run query
+func (dbo *DBO) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
 	if strings.Contains(query, "?") {
 		query = preparePositionalArgsQuery(query)
 	}
 	if dbo.Debug == true {
 		dbo.logMessage <- query
 	}
-	return dbo.DB.ExecContext(context.Background(), query, args...)
+	return dbo.DB.ExecContext(ctx, query, args...)
 }
 
 // QueryRow SQL query row
 func (dbo *DBO) QueryRow(query string, args ...interface{}) *sql.Row {
+	return dbo.QueryRowContext(context.Background(), query, args...)
+}
+
+// QueryRowContext SQL query row
+func (dbo *DBO) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
 	if strings.Contains(query, "?") {
 		query = preparePositionalArgsQuery(query)
 	}
 	if dbo.Debug == true {
 		dbo.logMessage <- query
 	}
-	return dbo.DB.QueryRowContext(context.Background(), query, args...)
+	return dbo.DB.QueryRowContext(ctx, query, args...)
 }
 
 // Prepare statement
 func (dbo *DBO) Prepare(query string) (*SqlStmt, error) {
+	return dbo.PrepareContext(context.Background(), query)
+}
+
+// PrepareContext statement
+func (dbo *DBO) PrepareContext(ctx context.Context, query string) (*SqlStmt, error) {
 	if strings.Contains(query, "?") {
 		query = preparePositionalArgsQuery(query)
 	}
-	stmt, err := dbo.DB.PrepareContext(context.Background(), query)
+	stmt, err := dbo.DB.PrepareContext(ctx, query)
 	return &SqlStmt{Stmt: stmt, Options: dbo.Options, query: query}, err
 }
 
 // Begin transaction
 func (dbo *DBO) Begin() (*SqlTx, error) {
-	tx, err := dbo.DB.BeginTx(context.Background(), nil)
+	return dbo.BeginContext(context.Background())
+}
+
+// BeginContext transaction
+func (dbo *DBO) BeginContext(ctx context.Context) (*SqlTx, error) {
+	tx, err := dbo.DB.BeginTx(ctx, nil)
 	stx := &SqlTx{
 		Tx:      tx,
 		Options: dbo.Options,
@@ -159,25 +185,40 @@ func (tx *SqlTx) Rollback() error {
 
 // Prepare Stmt
 func (tx *SqlTx) Prepare(query string) (*SqlStmt, error) {
+	return tx.PrepareContext(context.Background(), query)
+}
+
+// PrepareContext Stmt
+func (tx *SqlTx) PrepareContext(ctx context.Context, query string) (*SqlStmt, error) {
 	tx.m.Lock()
 	defer tx.m.Unlock()
 	if strings.Contains(query, "?") {
 		query = preparePositionalArgsQuery(query)
 	}
-	stmt, err := tx.PrepareContext(context.Background(), query)
+	stmt, err := tx.Tx.PrepareContext(ctx, query)
 	return &SqlStmt{Stmt: stmt, Options: tx.Options, query: query}, err
 }
 
 // Stmt Get Stmt
 func (tx *SqlTx) Stmt(stmt *SqlStmt) *SqlStmt {
+	return tx.StmtContext(context.Background(), stmt)
+}
+
+// StmtContext Get Stmt
+func (tx *SqlTx) StmtContext(ctx context.Context, stmt *SqlStmt) *SqlStmt {
 	tx.m.Lock()
 	defer tx.m.Unlock()
-	stm := tx.StmtContext(context.Background(), stmt.Stmt)
+	stm := tx.Tx.StmtContext(ctx, stmt.Stmt)
 	return &SqlStmt{Stmt: stm, Options: tx.Options, query: stmt.query}
 }
 
 // Exec Transaction
 func (tx *SqlTx) Exec(query string, args ...interface{}) (sql.Result, error) {
+	return tx.ExecContext(context.Background(), query, args...)
+}
+
+// ExecContext Transaction
+func (tx *SqlTx) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
 	tx.m.Lock()
 	defer tx.m.Unlock()
 	if strings.Contains(query, "?") {
@@ -186,11 +227,16 @@ func (tx *SqlTx) Exec(query string, args ...interface{}) (sql.Result, error) {
 	if tx.Debug == true {
 		tx.logMessage <- query
 	}
-	return tx.Tx.ExecContext(context.Background(), query, args...)
+	return tx.Tx.ExecContext(ctx, query, args...)
 }
 
 // Query Transaction
 func (tx *SqlTx) Query(query string, args ...interface{}) (*sql.Rows, error) {
+	return tx.QueryContext(context.Background(), query, args...)
+}
+
+// QueryContext Transaction
+func (tx *SqlTx) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
 	tx.m.Lock()
 	defer tx.m.Unlock()
 	if strings.Contains(query, "?") {
@@ -199,11 +245,16 @@ func (tx *SqlTx) Query(query string, args ...interface{}) (*sql.Rows, error) {
 	if tx.Debug == true {
 		tx.logMessage <- query
 	}
-	return tx.Tx.QueryContext(context.Background(), query, args...)
+	return tx.Tx.QueryContext(ctx, query, args...)
 }
 
 // QueryRow Query Row transaction
 func (tx *SqlTx) QueryRow(query string, args ...interface{}) *sql.Row {
+	return tx.QueryRowContext(context.Background(), query, args...)
+}
+
+// QueryRowContext Query Row transaction
+func (tx *SqlTx) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
 	tx.m.Lock()
 	defer tx.m.Unlock()
 	if strings.Contains(query, "?") {
@@ -212,11 +263,16 @@ func (tx *SqlTx) QueryRow(query string, args ...interface{}) *sql.Row {
 	if tx.Debug == true {
 		tx.logMessage <- query
 	}
-	return tx.Tx.QueryRowContext(context.Background(), query, args...)
+	return tx.Tx.QueryRowContext(ctx, query, args...)
 }
 
 // Exec Stmt Exec
 func (st *SqlStmt) Exec(args ...interface{}) (sql.Result, error) {
+	return st.ExecContext(context.Background(), args...)
+}
+
+// ExecContext Stmt Exec
+func (st *SqlStmt) ExecContext(ctx context.Context, args ...interface{}) (sql.Result, error) {
 	st.m.Lock()
 	defer st.m.Unlock()
 	if strings.Contains(st.query, "?") {
@@ -225,11 +281,16 @@ func (st *SqlStmt) Exec(args ...interface{}) (sql.Result, error) {
 	if st.Debug == true {
 		st.logMessage <- st.query
 	}
-	return st.Stmt.ExecContext(context.Background(), args...)
+	return st.Stmt.ExecContext(ctx, args...)
 }
 
 // Query Stmt Query
 func (st *SqlStmt) Query(args ...interface{}) (*sql.Rows, error) {
+	return st.QueryContext(context.Background(), args...)
+}
+
+// QueryContext Stmt Query
+func (st *SqlStmt) QueryContext(ctx context.Context, args ...interface{}) (*sql.Rows, error) {
 	st.m.Lock()
 	defer st.m.Unlock()
 	if strings.Contains(st.query, "?") {
@@ -238,11 +299,16 @@ func (st *SqlStmt) Query(args ...interface{}) (*sql.Rows, error) {
 	if st.Debug == true {
 		st.logMessage <- st.query
 	}
-	return st.Stmt.QueryContext(context.Background(), args...)
+	return st.Stmt.QueryContext(ctx, args...)
 }
 
 // QueryRow Stmt Query Row
 func (st *SqlStmt) QueryRow(args ...interface{}) *sql.Row {
+	return st.QueryRowContext(context.Background(), args...)
+}
+
+// QueryRowContext Stmt Query Row
+func (st *SqlStmt) QueryRowContext(ctx context.Context, args ...interface{}) *sql.Row {
 	st.m.Lock()
 	defer st.m.Unlock()
 	if strings.Contains(st.query, "?") {
@@ -251,7 +317,7 @@ func (st *SqlStmt) QueryRow(args ...interface{}) *sql.Row {
 	if st.Debug == true {
 		st.logMessage <- st.query
 	}
-	return st.Stmt.QueryRowContext(context.Background(), args...)
+	return st.Stmt.QueryRowContext(ctx, args...)
 }
 
 // PreparePositionalArgsQuery Position argument
