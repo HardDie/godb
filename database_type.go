@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"sync"
 	"time"
-
-	"github.com/dimonrus/gocli"
 )
 
 // Queryer interface
@@ -28,12 +26,28 @@ type Connection interface {
 	GetMaxIdleConns() int
 }
 
+type ILogger interface {
+	Output(callDepth int, message string) error
+
+	Printf(format string, v ...interface{})
+	Print(v ...interface{})
+	Println(v ...interface{})
+
+	Fatal(v ...interface{})
+	Fatalf(format string, v ...interface{})
+	Fatalln(v ...interface{})
+
+	Panic(v ...interface{})
+	Panicf(format string, v ...interface{})
+	Panicln(v ...interface{})
+}
+
 // Options database object options
 type Options struct {
 	// Debug mode shows logs
 	Debug bool
 	// Logger
-	Logger gocli.Logger
+	Logger ILogger
 	// log message data
 	logMessage chan string
 	// TTL for transaction
